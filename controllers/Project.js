@@ -26,6 +26,19 @@ const PUBLIC_ONLY = { active: { $ne: false } };
 
 const trim = (v) => (typeof v === "string" ? v.trim() : "");
 
+/** Store 10-digit Indian mobile only (admin enters e.g. 9404958265). */
+function contactNumberForSave(raw) {
+  const trimmed = trim(raw);
+  if (!trimmed) return { value: "" };
+  let digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  if (!/^[6-9]\d{9}$/.test(digits)) {
+    return { error: "Contact number must be 10 digits (e.g. 9404958265)" };
+  }
+  return { value: digits };
+}
+
 /** Multipart often sends JSON as a string. */
 function parseJson(value, fallback) {
   if (value == null || value === "") return fallback;
@@ -197,6 +210,11 @@ const createProject = async (req, res) => {
       return res.status(400).json({ success: false, message: "features must be an array" });
     }
 
+    const savedContact = contactNumberForSave(contactNumber);
+    if (savedContact.error) {
+      return res.status(400).json({ success: false, message: savedContact.error });
+    }
+
     const project = new projectModel({
       name,
       builder,
@@ -204,7 +222,7 @@ const createProject = async (req, res) => {
       address: trim(address),
       propertyType: parsedPropertyType,
       status: parsedStatus,
-      contactNumber: trim(contactNumber),
+      contactNumber: savedContact.value,
       latitude: Number(req.body.latitude) || undefined,
       longitude: Number(req.body.longitude) || undefined,
       description,
@@ -329,6 +347,8 @@ const getProjectById = async (req, res) => {
  */
 /** Random public projects with cover media for the home featured grid. */
 const getFeaturedProjects = async (req, res) => {
+  const parsed = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 20) : 6;
   try {
     const match = {
       ...PUBLIC_ONLY,
@@ -339,17 +359,15 @@ const getFeaturedProjects = async (req, res) => {
       ],
     };
 
-
     const featuredProjects = await projectModel.aggregate([
-      { $match: match }
+      { $match: match },
+      { $sample: { size: limit } },
     ]);
-
-    const shuffledProjects = featuredProjects.sort((a, b) => Math.random() - 0.5);
 
     res.status(200).json({
       success: true,
       message: "Featured projects fetched",
-      featuredProjects: shuffledProjects,
+      featuredProjects,
     });
   } catch (error) {
     console.error("getFeaturedProjects error:", error);
@@ -617,6 +635,11 @@ const updateProject = async (req, res) => {
     const nextLat = Number(latitudeRaw);
     const nextLng = Number(longitudeRaw);
 
+    const savedContact = contactNumberForSave(contactNumber);
+    if (savedContact.error) {
+      return res.status(400).json({ success: false, message: savedContact.error });
+    }
+
     const updatedFields = {
       name,
       builder,
@@ -624,7 +647,7 @@ const updateProject = async (req, res) => {
       address: trim(address ?? existingProject.address),
       propertyType: parsedPropertyType,
       status: parsedStatus,
-      contactNumber: trim(contactNumber),
+      contactNumber: savedContact.value,
       latitude: Number.isFinite(nextLat) ? nextLat : existingProject.latitude,
       longitude: Number.isFinite(nextLng) ? nextLng : existingProject.longitude,
       description,
