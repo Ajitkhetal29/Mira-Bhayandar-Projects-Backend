@@ -17,6 +17,7 @@ import {
   parseS3KeyFromUrl,
 } from "../utils/s3Assets.js";
 import { normalizeLayoutsForSave } from "../utils/layoutNormalize.js";
+import { buildUniqueProjectSlug } from "../utils/projectSlug.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -215,8 +216,11 @@ const createProject = async (req, res) => {
       return res.status(400).json({ success: false, message: savedContact.error });
     }
 
+    const slug = await buildUniqueProjectSlug(name.trim());
+
     const project = new projectModel({
       name,
+      slug,
       builder,
       location,
       address: trim(address),
@@ -322,12 +326,20 @@ const getFilterOptions = async (req, res) => {
 const getProjectById = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid project id" });
+    if (!id?.trim()) {
+      return res.status(400).json({ success: false, message: "Invalid project identifier" });
     }
+    const param = id.trim();
     const includeInactive =
       req.query.includeInactive === "true" || req.query.includeInactive === "1";
-    const project = await projectModel.findById(id).lean();
+
+    let project = null;
+    if (/^[a-f\d]{24}$/i.test(param)) {
+      project = await projectModel.findById(param).lean();
+    }
+    if (!project) {
+      project = await projectModel.findOne({ slug: param.toLowerCase() }).lean();
+    }
     if (!project) {
       return res.status(404).json({ success: false, message: "Project not found" });
     }
@@ -640,8 +652,16 @@ const updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: savedContact.error });
     }
 
+    const trimmedName = name.trim();
+    const needsSlug =
+      !existingProject.slug || trimmedName !== String(existingProject.name || "").trim();
+    const slug = needsSlug
+      ? await buildUniqueProjectSlug(trimmedName, existingProject._id)
+      : existingProject.slug;
+
     const updatedFields = {
       name,
+      slug,
       builder,
       location,
       address: trim(address ?? existingProject.address),

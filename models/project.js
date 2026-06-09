@@ -19,6 +19,14 @@ const projectSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    /** URL-safe identifier for public project pages, e.g. lodha-amara-mira-road */
+    slug: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      sparse: true,
+    },
     logo: {
       type: String,
       default: "",
