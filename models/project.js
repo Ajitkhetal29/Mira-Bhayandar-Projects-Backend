@@ -10,7 +10,7 @@ export const PROPERTY_TYPES = [
 ];
 
 /** BHK / configuration options admin picks per project (used for filters). */
-export const PLAN_OPTIONS = ["1 BHK", "2 BHK", "3 BHK", "4 BHK", "5 BHK", "JODI"];
+export const PLAN_OPTIONS = ["1 BHK", "2 BHK", "3.5 BHK","3 BHK", "4 BHK", "5 BHK", "JODI"];
 
 const projectSchema = new mongoose.Schema(
   {
